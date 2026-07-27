@@ -1,0 +1,15 @@
+.env
+__pycache__/
+pipeline/.tts_cache/
+remotion/node_modules/
+remotion/out/
+remotion/public/vo_*.mp3
+releases/
+.env
+# 品牌素材與字體(不公開)
+remotion/public/*.png
+remotion/public/*.jpg
+remotion/public/*.mp3
+remotion/public/*.mp4
+remotion/public/fonts/
+remotion/public/manifest.json

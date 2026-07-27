@@ -1,0 +1,45 @@
+{
+  "id": "neruda_port_001",
+  "lang": "zh",
+  "book": "二十首情诗与绝望的歌",
+  "author": "聂鲁达",
+  "segments": [
+    {
+      "zh": "有时候我在清晨醒来，",
+      "en": "Sometimes I wake at dawn,"
+    },
+    {
+      "zh": "我的灵魂甚至还是湿的。",
+      "en": "my soul still damp,"
+    },
+    {
+      "zh": "远远的，海洋鸣响并且发出回声。",
+      "en": "far away, the ocean echoes and resounds."
+    },
+    {
+      "zh": "这是一个港口，我在这里爱你。",
+      "en": "This is a harbor, where I love you."
+    }
+  ],
+  "traditional": "s2tw",
+  "hook_video": "hook.mp4",
+  "tts": {
+    "provider": "elevenlabs",
+    "voice_id": "TVNR4JHLMgoXHeX3AU1z",
+    "model_id": "eleven_v3",
+    "stability": 0.0
+  },
+  "timing": {
+    "hook_sec": 4.0,
+    "seg_gap_sec": 0.45,
+    "full_sec": 6.0,
+    "title_overlap_sec": 1.0
+  },
+  "theme": {
+    "paper": "#f3ede1",
+    "ink": "#0e5d2d",
+    "inkDeep": "#0a462a"
+  },
+  "music": "bgm.mp3",
+  "safeMode": true
+}

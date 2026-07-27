@@ -1,0 +1,46 @@
+{
+  "id": "unknown_life_song_001",
+  "lang": "zh",
+  "book": "",
+  "author": "",
+  "segments": [
+    {
+      "zh": "人生就是这样，",
+      "en": "Life is just like this,"
+    },
+    {
+      "zh": "一个人在你生命里出现，",
+      "en": "someone appears in your life,"
+    },
+    {
+      "zh": "只是为了教给你一支歌，",
+      "en": "only to teach you a song,"
+    },
+    {
+      "zh": "然后永远消失。",
+      "en": "then vanishes forever."
+    }
+  ],
+  "traditional": "s2tw",
+  "hook_video": "hook.mp4",
+  "tts": {
+    "provider": "elevenlabs",
+    "voice_id": "TVNR4JHLMgoXHeX3AU1z",
+    "model_id": "eleven_v3",
+    "stability": 0.0
+  },
+  "title_tts_text": "[somber]",
+  "timing": {
+    "hook_sec": 4.0,
+    "seg_gap_sec": 0.45,
+    "full_sec": 6.0,
+    "title_overlap_sec": 1.0
+  },
+  "theme": {
+    "paper": "#f3ede1",
+    "ink": "#0e5d2d",
+    "inkDeep": "#0a462a"
+  },
+  "music": "bgm.mp3",
+  "safeMode": true
+}

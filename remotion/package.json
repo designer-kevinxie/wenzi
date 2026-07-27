@@ -1,0 +1,16 @@
+{
+  "name": "wenziji",
+  "private": true,
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render LiteraryQuote out/video.mp4 --concurrency=2",
+    "card": "remotion still QuoteCard out/card.png",
+    "card:tall": "remotion still QuoteCardTall out/card-tall.png"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "remotion": "^4.0.0"
+  }
+}

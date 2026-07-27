@@ -1,0 +1,41 @@
+{
+  "id": "hesse_summer_001",
+  "lang": "zh",
+  "book": "夏日终曲",
+  "author": "赫尔曼·黑塞",
+  "segments": [
+    {
+      "zh": "能回到自己喜欢且有意义的工作岗位的人，",
+      "en": "Those who can return to a job they love and find meaningful,"
+    },
+    {
+      "zh": "能陪伴爱人的人，",
+      "en": "who can accompany the person they love,"
+    },
+    {
+      "zh": "能回到故乡的人，是幸福的。",
+      "en": "and who can return to their homeland, are happy."
+    }
+  ],
+  "traditional": "s2tw",
+  "hook_video": "hook.mp4",
+  "tts": {
+    "provider": "elevenlabs",
+    "voice_id": "TVNR4JHLMgoXHeX3AU1z",
+    "model_id": "eleven_v3",
+    "stability": 0.0
+  },
+  "timing": {
+    "hook_sec": 4.0,
+    "seg_gap_sec": 0.45,
+    "full_sec": 6.0,
+    "title_overlap_sec": 1.0
+  },
+  "theme": {
+    "paper": "#f3ede1",
+    "ink": "#0e5d2d",
+    "inkDeep": "#0a462a"
+  },
+  "music": "bgm.mp3",
+  "safeMode": true
+}
