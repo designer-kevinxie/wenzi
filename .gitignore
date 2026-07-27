@@ -14,7 +14,7 @@ remotion/public/*.mp4
 remotion/public/fonts/
 remotion/public/manifest.json
 
-
-.DS_Store
+**/.DS_Store
+.gitignore
 
 pipeline/quotes
