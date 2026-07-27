@@ -15,6 +15,6 @@ remotion/public/fonts/
 remotion/public/manifest.json
 
 **/.DS_Store
-.gitignore
+**/.gitignore
 
 pipeline/quotes
