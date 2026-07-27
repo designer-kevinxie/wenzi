@@ -30,7 +30,7 @@ export const LiteraryQuote: React.FC<{ manifest: any }> = ({ manifest }) => {
   const logoAt = acts.title.from;
 
   // 鉤子段的短暫露出:0 → 1 秒 20 幀,之後淡出
-  const INTRO_LOGO = { from: 0, to: 0 };
+  const INTRO_LOGO = { from: 0, to: 40 };
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.paper }}>

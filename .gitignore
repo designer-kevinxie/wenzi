@@ -13,3 +13,8 @@ remotion/public/*.mp3
 remotion/public/*.mp4
 remotion/public/fonts/
 remotion/public/manifest.json
+
+
+.DS_Store
+
+pipeline/quotes
