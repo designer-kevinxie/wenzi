@@ -166,14 +166,12 @@ cd remotion && npm run dev
 
 ---
 
----
-
 ## 批次出片
 
 `new.py` 一次一句,適合精修。累積了一批句子想一口氣跑完時用 `batch.py`——
 句子存在 Google Sheet 裡,手機隨手記,回到電腦一條命令跑完整批。
 
-Google Sheet batch.py releases/ ────────────── ───────────────────── ───────── 待做的句子 ──→ 抓待做行 │ 標記 processing ──回寫──→ 你在手機上看得到進度 new.py → quote json publish.py → 出片 ▼ 回寫 done / error ──→ 成品
+`Google Sheet batch.py releases/ ────────────── ───────────────────── ───────── 待做的句子 ──→ 抓待做行 │ 標記 processing ──回寫──→ 你在手機上看得到進度 new.py → quote json publish.py → 出片 ▼ 回寫 done / error ──→ 成品`
 
 狀態即時回寫,所以跑的時候手機打開 Sheet 就能看到每一句的進度。
 中途出錯不會中斷整批,該行標成 `error` 並附上原因,繼續跑下一句。
