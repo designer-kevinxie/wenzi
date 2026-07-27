@@ -6,6 +6,9 @@ new.py — 一句話 → 可直接出片的 quote json。
 作者出處也可以直接黏在句子後面,會自動解析:
     python3 new.py "不被爱仅是时运不济，而无力去爱才是真正的灾难。——加缪《重返提帕萨》"
 
+但**明確傳了 --author / --book 時就不會再猜**,句尾原樣保留 ——
+詩歌的末行常常長得像署名(如「——对自己的爱」),猜錯會把正文吃掉一行。
+
 模型負責三件事:
     1. 斷句分段(每段一屏,依語氣停頓而非字數硬切)
     2. 逐段英譯(必須與中文分段語意對應)
@@ -13,6 +16,9 @@ new.py — 一句話 → 可直接出片的 quote json。
 
 產出 quotes/<slug>.json,印出來讓你過目。斷句是編輯決策,
 覺得不對就直接改 json 裡的 segments,那是最該由人決定的部分。
+
+拼回校驗不通過時**以 exit code 2 結束**,好讓 batch.py 判定為失敗、
+不會拿著錯的 segments 繼續出片。json 仍會寫出來供你手動修。
 
 選項:
     --go        生成後立刻跑 publish.py 出片
@@ -44,7 +50,15 @@ PROMPT = """把下面這則引文整理成短視頻用的資料。
 1. segments — 把引文切成 2-4 段,每段一屏顯示。
    斷句依「語氣停頓與呼吸」,不是按字數硬切。優先在逗號、分號、轉折處斷。
    每段中文控制在 22 字以內;若原句很短(20 字以內)就只切 1-2 段。
-   標點保留在該段末尾。所有段落拼起來必須與原句完全一致,一字不差。
+   標點保留在該段末尾。
+
+   **只能切,不能改。** 所有段落拼起來必須與原句完全一致,一字不差,
+   標點也一個不差。特別注意這三點:
+   - 原句末尾沒有句號時,不要補句號。詩歌尤其常常沒有句末標點。
+   - 原句最後一行看起來像署名或題獻(例如「——对自己的爱」)時,
+     那也是正文的一部分,要照樣切進 segments,不可以丟掉。
+   - 不要把簡體改成繁體,也不要順手改錯字。
+
 2. 每段附英譯 en,必須與該段中文語意對應(不是整句英譯後亂切)。
    英譯要有文學感,不要直譯腔。分段處用逗號或分號銜接,讀起來像完整一句。
 3. author / book — 若上面已給就照用;沒給而你確定知道出處,就補上;
@@ -64,6 +78,10 @@ PROMPT = """把下面這則引文整理成短視頻用的資料。
 
 
 QUOTE_MARKS = "「」『』“”\"\u2018\u2019''"
+
+# 模型最愛多補的尾部標點。只有「多出來的全是這些字元」時才自動修,
+# 少一個字、改一個字都不在自動修復範圍內 —— 那種要人看。
+TRAILING_PUNCT = "。．.！!？?、,，；;：:…"
 
 
 def _looks_like_name(s: str) -> bool:
@@ -88,30 +106,42 @@ def normalize(s: str) -> str:
     return "".join(c for c in s if c not in QUOTE_MARKS)
 
 
-def parse_inline(text: str):
-    """把黏在句子後面的作者出處拆出來。"""
+def parse_inline(text: str, want_author: bool = True, want_book: bool = True):
+    """把黏在句子後面的作者出處拆出來。
+
+    want_author / want_book 為 False,代表呼叫端已經明確給了該欄位。
+    這時**絕不能再從句尾猜** —— 詩歌的末行常常長得像署名
+    (例如「——对自己的爱」),一猜錯就把正文悄悄吃掉一行,而且不報錯。
+    """
     # 先把可能重複的書名號收斂成單層:《《X》》 → 《X》
     text = re.sub(r"《+\s*([^《》]+?)\s*》+", r"《\1》", text)
     author = book = ""
-    m = re.search(r"[—–\-]{1,2}\s*([^《》\n]+?)\s*《([^》]+)》\s*$", text)
-    if m and _looks_like_name(m.group(1).strip()):
-        author, book = m.group(1).strip(), m.group(2).strip()
-        text = text[: m.start()].strip()
-        return text, author, book
-    m = re.search(r"《([^》]+)》\s*$", text)
-    if m:
-        book = m.group(1).strip()
-        text = text[: m.start()].strip()
-    m = re.search(r"[—–\-]{1,2}\s*([^\n]+?)\s*$", text)
-    if m and _looks_like_name(m.group(1).strip()):
-        author = m.group(1).strip()
-        text = text[: m.start()].strip()
-    elif not author:
-        # 沒有破折號,但作者直接黏在收尾引號後面:「…消失。」于堅
-        m = re.search(r"[」』”\u2019\"]\s*([^」』”\u2019\"\n]{1,10})\s*$", text)
+
+    # 「——作者《書名》」一次吃掉,只有兩者都要猜時才適用
+    if want_author and want_book:
+        m = re.search(r"[—–\-]{1,2}\s*([^《》\n]+?)\s*《([^》]+)》\s*$", text)
+        if m and _looks_like_name(m.group(1).strip()):
+            author, book = m.group(1).strip(), m.group(2).strip()
+            return strip_quotes(text[: m.start()].strip()), author, book
+
+    if want_book:
+        m = re.search(r"《([^》]+)》\s*$", text)
+        if m:
+            book = m.group(1).strip()
+            text = text[: m.start()].strip()
+
+    if want_author:
+        m = re.search(r"[—–\-]{1,2}\s*([^\n]+?)\s*$", text)
         if m and _looks_like_name(m.group(1).strip()):
             author = m.group(1).strip()
-            text = text[: m.start() + 1].strip()
+            text = text[: m.start()].strip()
+        else:
+            # 沒有破折號,但作者直接黏在收尾引號後面:「…消失。」于堅
+            m = re.search(r"[」』”\u2019\"]\s*([^」』”\u2019\"\n]{1,10})\s*$", text)
+            if m and _looks_like_name(m.group(1).strip()):
+                author = m.group(1).strip()
+                text = text[: m.start() + 1].strip()
+
     return strip_quotes(text), author, book
 
 
@@ -139,6 +169,36 @@ def ask_llm(text, author, book) -> dict:
     )
 
 
+def repair_trailing_punct(original: str, segments: list) -> str:
+    """模型偶爾會在最後一段補上原句沒有的句末標點 —— 詩歌尤其常見,
+    因為訓練語料裡的句子多半有句號。
+
+    這一種偏差是可以確定性修復的:從最後一段的尾巴逐個刪標點,
+    刪到拼回結果與原句完全相符為止。刪不到相符就整個放棄(不留半殘狀態),
+    交給 verify 報錯讓人看。少字、改字一律不碰。
+
+    回傳被刪掉的字串(沒改動則回傳空字串)。
+    """
+    if not segments:
+        return ""
+
+    target = normalize(original)
+    head = "".join(s["zh"] for s in segments[:-1])
+    last = segments[-1]["zh"]
+
+    if normalize(head + last) == target:
+        return ""                       # 本來就對,不用修
+
+    trimmed, removed = last, ""
+    while trimmed and (trimmed[-1] in TRAILING_PUNCT or trimmed[-1].isspace()):
+        removed = trimmed[-1] + removed
+        trimmed = trimmed[:-1]
+        if normalize(head + trimmed) == target:
+            segments[-1]["zh"] = trimmed
+            return removed
+    return ""                           # 刪光標點還是不符 → 不是這種問題
+
+
 def verify(original: str, segments: list) -> bool:
     """分段拼回去必須與原句一致 —— 這是最容易出錯也最該檢查的一點。"""
     a = normalize("".join(s["zh"] for s in segments))
@@ -147,6 +207,14 @@ def verify(original: str, segments: list) -> bool:
         print("  ! 分段拼回與原句不符,請檢查 segments:")
         print(f"    原句: {b}")
         print(f"    拼回: {a}")
+        # 指出第一個分歧的位置,比自己用眼睛對兩行字快得多
+        for i, (x, y) in enumerate(zip(a, b)):
+            if x != y:
+                print(f"    第 {i + 1} 字起分歧: 拼回「{a[i:i+8]}」 vs 原句「{b[i:i+8]}」")
+                break
+        else:
+            longer, label = (a, "拼回") if len(a) > len(b) else (b, "原句")
+            print(f"    長度不同,{label}多出: 「{longer[min(len(a), len(b)):]}」")
         return False
     return True
 
@@ -175,16 +243,24 @@ def main():
     if not raw_text:
         sys.exit("✗ 請提供引文")
 
-    text, in_author, in_book = parse_inline(raw_text)
+    # 已經明確給的欄位就不要再猜,避免把正文末行當成署名剝掉
+    text, in_author, in_book = parse_inline(
+        raw_text,
+        want_author=not vals.get("author"),
+        want_book=not vals.get("book"),
+    )
     author = vals.get("author") or in_author
     book = vals.get("book") or in_book
 
     print(f"▶ 引文: {text}")
-    print(f"  作者: {author or '(交給 Gemini 判斷)'}  出處: {book or '(交給 Gemini 判斷)'}")
+    print(f"  作者: {author or '(交給模型判斷)'}  出處: {book or '(交給模型判斷)'}")
     print("\n▶ 分段與英譯中…")
     g = ask_llm(text, author, book)
 
     segments = g.get("segments", [])
+    removed = repair_trailing_punct(text, segments)
+    if removed:
+        print(f"  · 已自動移除模型多加的句末標點「{removed}」")
     ok = verify(text, segments)
 
     tts, theme, timing = last_tts_config()
@@ -223,8 +299,10 @@ def main():
     print(f"\n  朗讀: {quote['title_tts_text']}")
 
     if not ok:
+        # exit code 2 —— json 已寫出供手動修,但呼叫端(batch.py)要知道這次失敗了,
+        # 不能拿著錯的 segments 繼續出片。
         print("\n  先修好 segments 再出片。")
-        return
+        sys.exit(2)
 
     if "--go" in flags:
         print()

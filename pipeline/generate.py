@@ -72,20 +72,46 @@ def cached_tts(provider, text, lang, voice_config, out_path: Path):
 
 # ---------------------------------------------------------------- segment split
 
+# 顯示字串裡有、但時間戳流裡沒有的字元(主要是標點)。
+# 「——」最常見:它會被上一段的最後一個 word 吃掉。
+ORPHAN_PUNCT = set("—–－、，。！？；：…·,.!?;:")
+
+
 def retag_display(ws, zh_display):
     """把時間戳上的簡體字換回繁體顯示字。
 
     朗讀送的是簡體(發音準),回傳的時間戳字元因此是簡體;
-    但字幕要顯示繁體。繁簡逐字一對一、字數相同,所以能逐位對應:
-    時間戳照用,只換文字。
+    但字幕要顯示繁體。繁簡逐字一對一、字數相同,所以能逐位對應。
+
+    但**不能假設 ws 的字元數等於顯示字串**。標點(尤其開頭的「——」)
+    常被 split_words_by_segment 併進上一段的最後一個 word,長度就對不上。
+    盲目按位對應的後果是整段位移、尾巴憑空消失 —— 而且不報錯。
+
+    所以這裡做兩件事:
+      1. word 之前若還有顯示字串獨有的標點,先掛到這個 word 前面
+      2. 掃完仍有剩字,補回最後一個 word
+    保證顯示字串一個字都不會掉。
     """
     chars = [c for c in zh_display if not c.isspace()]
     out, i = [], 0
+
     for w in ws:
+        # 這個 word 不是標點,但顯示字串當前位置是 —— 那是被吃掉的標點,先吐出來
+        lead = ""
+        while (i < len(chars) and chars[i] in ORPHAN_PUNCT
+               and w["text"] and w["text"][0] not in ORPHAN_PUNCT):
+            lead += chars[i]
+            i += 1
+
         n = len(w["text"])
-        disp = "".join(chars[i:i + n])
+        disp = lead + "".join(chars[i:i + n])
         i += n
         out.append({**w, "text": disp or w["text"]})
+
+    # 兜底:真的還有剩字就掛到最後一個 word,寧可時間略早也不要少字
+    if i < len(chars) and out:
+        out[-1] = {**out[-1], "text": out[-1]["text"] + "".join(chars[i:])}
+
     return out
 
 

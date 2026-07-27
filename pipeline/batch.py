@@ -35,13 +35,32 @@ TOKEN = os.environ.get("SHEET_TOKEN", "")
 RELEASES = ROOT.parent / "releases"
 
 
+def clean_item(item: dict) -> dict:
+    """把 Sheet 一行清成乾淨的欄位。
+
+    在**入口清一次**,列印和出片就共用同一份結果 ——
+    否則會出現顯示《《自爱》》、實際傳的卻是「自爱」這種不一致。
+
+    text 保留詩歌換行(收成單一換行),只清行首行尾空白:
+    斷句要參考原本的分行,不能壓成一行。
+    """
+    return {
+        **item,
+        "text": "\n".join(
+            l.strip() for l in (item.get("text") or "").strip().splitlines() if l.strip()
+        ),
+        "author": (item.get("author") or "").strip().lstrip("—–-").strip(),
+        "book": (item.get("book") or "").strip().strip("《》「」『』").strip(),
+    }
+
+
 def fetch_pending():
     r = requests.get(URL, params={"token": TOKEN}, timeout=30)
     r.raise_for_status()
     data = r.json()
     if "error" in data:
         sys.exit(f"✗ Web App 回應錯誤:{data['error']}(檢查 token)")
-    return data.get("pending", [])
+    return [clean_item(x) for x in data.get("pending", [])]
 
 
 def write_back(updates):
@@ -54,40 +73,22 @@ def write_back(updates):
         print(f"  ! 回寫 Sheet 失敗(不影響出片):{e}")
 
 
-def build_quote_arg(item):
-    """把 sheet 的一行組成 new.py 能吃的引文字串。
-    Sheet 欄位裡可能夾帶多餘的書名號、破折號、或詩歌換行,先清掉。
-    書名號由程式加;換行收成單一空格再交給模型斷句。"""
-    # 保留詩歌換行(收成單一換行),只清掉行首行尾多餘空白
-    text = "\n".join(line.strip() for line in item["text"].strip().splitlines() if line.strip())
-    author = item.get("author", "").strip().lstrip("—–-").strip()
-    book = item.get("book", "").strip().strip("《》「」『』").strip()
-
-    if book:
-        return f"{text}——{author}《{book}》"
-    if author:
-        return f"{text}——{author}"
-    return text
-
-
 def run_one(item, want_meta: bool) -> tuple[bool, str]:
     """跑 new.py(不 --go)拿到 slug,再跑 publish.py。回傳 (成功, 訊息)。"""
-    # 顯式傳 --author/--book,text 原樣傳入 —— 這樣詩歌內部的破折號、換行
-    # 不會被當成作者分隔符,也不會有書名號重複問題。
-    text = "\n".join(l.strip() for l in item["text"].strip().splitlines() if l.strip())
-    author = item.get("author", "").strip().lstrip("—–-").strip()
-    book = item.get("book", "").strip().strip("《》「」『』").strip()
-
-    cmd = [sys.executable, "new.py", text]
-    if author:
-        cmd += ["--author", author]
-    if book:
-        cmd += ["--book", book]
+    # text 原樣傳入,author / book 走獨立參數 —— new.py 收到明確的
+    # --author / --book 就不會再從句尾猜署名,詩歌末行(「——对自己的爱」
+    # 這種)才不會被當成署名剝掉。
+    cmd = [sys.executable, "new.py", item["text"]]
+    if item["author"]:
+        cmd += ["--author", item["author"]]
+    if item["book"]:
+        cmd += ["--book", item["book"]]
 
     p = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p.stdout)
     if p.returncode != 0:
-        return False, (p.stderr or p.stdout)[-200:]
+        # new.py 拼回校驗失敗時是 exit 2,錯誤原因印在 stdout 尾巴
+        return False, (p.stderr or p.stdout)[-200:].strip()
 
     m = re.search(r"quotes/[\w\-]+\.json", p.stdout)
     if not m:
@@ -101,7 +102,7 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
     p2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p2.stdout[-500:])
     if p2.returncode != 0:
-        return False, (p2.stderr or p2.stdout)[-200:]
+        return False, (p2.stderr or p2.stdout)[-200:].strip()
 
     slug = Path(qpath).stem
     stamp = date.today().strftime("%Y%m%d")
@@ -130,8 +131,10 @@ def main():
 
     print(f"▶ 待做 {len(pending)} 句:\n")
     for it in pending:
-        tag = f"《{it['book']}》" if it.get("book") else (it.get("author") or "")
-        print(f"  [{it['row']}] {it['text'][:30]}  {tag}")
+        # 多行的詩收成一行顯示,清單才看得清楚(實際傳給 new.py 的仍是多行)
+        preview = " / ".join(it["text"].splitlines())[:36]
+        tag = f"《{it['book']}》" if it["book"] else (it["author"] or "")
+        print(f"  [{it['row']}] {preview}  {tag}")
 
     if dry:
         print("\n(--dry 模式,不出片)")
@@ -139,9 +142,11 @@ def main():
 
     print()
     ok_count = 0
+    failed = []
     for it in pending:
         row = it["row"]
-        print(f"\n{'='*50}\n▶ 第 {row} 行:{it['text'][:30]}…")
+        preview = " / ".join(it["text"].splitlines())[:36]
+        print(f"\n{'='*50}\n▶ 第 {row} 行:{preview}…")
         write_back([{"row": row, "status": "processing"}])
         try:
             ok, msg = run_one(it, want_meta)
@@ -153,10 +158,13 @@ def main():
             write_back([{"row": row, "status": "done", "note": msg}])
             print(f"  ✓ {msg}")
         else:
+            failed.append(row)
             write_back([{"row": row, "status": "error", "note": msg}])
             print(f"  ✗ {msg}")
 
     print(f"\n{'='*50}\n✓ 完成 {ok_count}/{len(pending)}  → {RELEASES}")
+    if failed:
+        print(f"✗ 失敗的行:{', '.join(str(r) for r in failed)}(Sheet 的 note 欄有原因)")
 
 
 if __name__ == "__main__":
