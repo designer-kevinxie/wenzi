@@ -21,7 +21,7 @@
       "en": "then vanishes forever."
     }
   ],
-  "traditional": "s2tw",
+  "traditional": null,
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",

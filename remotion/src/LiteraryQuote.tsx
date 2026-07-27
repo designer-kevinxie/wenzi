@@ -34,7 +34,7 @@ export const LiteraryQuote: React.FC<{ manifest: any }> = ({ manifest }) => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: theme.paper }}>
-      <PaperBase theme={theme} />
+      <PaperBase theme={theme} seed={manifest.id} />
 
       {hook ? (
         <Sequence from={0} durationInFrames={hook.toFrame}>
@@ -56,6 +56,7 @@ export const LiteraryQuote: React.FC<{ manifest: any }> = ({ manifest }) => {
           theme={theme}
           startFrame={acts.full.from}
           absFrame={frame}
+          vertical={manifest.vertical}
         />
       ) : null}
 

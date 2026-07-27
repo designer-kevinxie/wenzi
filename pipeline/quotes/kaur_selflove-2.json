@@ -17,7 +17,7 @@
       "en": "and only love remains."
     }
   ],
-  "traditional": "s2tw",
+  "traditional": null,
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",

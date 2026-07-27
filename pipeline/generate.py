@@ -234,6 +234,8 @@ def main(quote_path: str):
         "theme": quote.get("theme", {}),
         "music": quote.get("music"),
         "safeMode": quote.get("safeMode", True),
+        "vertical": quote.get("vertical", False),
+        "id": quote.get("id", ""),
     }
 
     out = PUBLIC_DIR / "manifest.json"

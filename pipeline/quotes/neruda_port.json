@@ -21,7 +21,7 @@
       "en": "This is a harbor, where I love you."
     }
   ],
-  "traditional": "s2tw",
+  "traditional": null,
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",

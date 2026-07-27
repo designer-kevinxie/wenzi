@@ -17,7 +17,7 @@
       "en": "and who can return to their homeland, are happy."
     }
   ],
-  "traditional": "s2tw",
+  "traditional": null,
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",

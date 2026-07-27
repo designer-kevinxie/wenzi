@@ -9,35 +9,40 @@ import { pressStyle } from "./PaperBase";
  * 所有尺寸都按畫布比例計算,所以 9:16 影片和 3:4 卡片共用同一個組件,
  * 各自重新排版(不是把 9:16 裁一刀)。
  *
- * 字級自動計算(中文全形等寬,可精確推算,不需 DOM 量測):
- *   每行字數 = 框寬 ÷ (字級 + 字距)
- *   行數     = 用貪婪換行實際數一遍(不是 ⌈總字數 ÷ 每行字數⌉)
- *   總高     = 行數 × 字級 × 行高
- * 由大而小取第一個放得下的字級。
+ * 支援橫排與豎排。豎排的數學是橫排的轉置:
+ *   橫排 —— 字沿「寬」流動,行沿「高」堆疊
+ *   豎排 —— 字沿「高」流動,列沿「寬」堆疊
+ * 所以下面用 along(順文字方向)/ across(垂直於文字方向)兩個中性名詞,
+ * 一套公式同時服務兩種排法。
  */
 
 const LINE_H = 1.52;
-const MARGIN_R = 0.085; // 左右留白佔寬度比例(影片與靜圖共用)
+const MARGIN_R = 0.085; // 左右留白佔寬度比例
 
 /**
- * 版心比例:影片與靜圖**分開**設定。
+ * 版心比例:影片 / 靜圖、橫排 / 豎排各一組。
  *
  * 影片最下方有常駐 logo(theme.ts 的 LOGO_BOTTOM.video = 0.135),
  * 所以底部得留 30% 淨空。靜圖版沒有 logo,只有右下角一行小小的
- * @文字紀(QuoteCard.tsx,距底 4.5%),留 30% 會讓正文整塊被推到上半部、
- * 落款孤零零吊在畫面中間 —— 底下近半張紙是空的。
+ * @文字紀(QuoteCard.tsx,距底 4.5%),留 30% 會讓正文整塊被推到上半部。
  *
- * textH  正文可用高度佔畫布比例(調大 → 字變大)
- * bottom 底部保留高度佔畫布比例(調小 → 整塊往下走、字也變大)
+ * along  順文字方向的可用長度佔比(橫排看寬、豎排看高)
+ * bottom 底部保留高度佔比。豎排是垂直置中,這個值只用來微調整體位置
  * maxR   字級上限佔寬度比例(短句時才會碰到這個天花板)
  */
 const LAYOUT = {
-  video: { textH: 0.53, bottom: 0.3, maxR: 0.13 },
-  still: { textH: 0.66, bottom: 0.1, maxR: 0.15 },
+  video: { along: 0.53, bottom: 0.3, maxR: 0.13 },
+  still: { along: 0.66, bottom: 0.1, maxR: 0.15 },
+  videoV: { along: 0.62, bottom: 0.18, maxR: 0.13 },
+  stillV: { along: 0.74, bottom: 0.04, maxR: 0.15 },
 };
 
+const layoutOf = (still: boolean, vertical: boolean) =>
+  vertical ? (still ? LAYOUT.stillV : LAYOUT.videoV)
+           : (still ? LAYOUT.still : LAYOUT.video);
+
 /**
- * 行首禁則(避頭點)—— 這些標點不能出現在行首。
+ * 行首禁則(避頭點)—— 這些標點不能出現在行首 / 列首。
  *
  * 每個字都是獨立的 inline-block,瀏覽器把它們當成互不相干的行內盒子,
  * 於是可以在任意兩個之間斷行,CJK 的禁則處理完全失效。
@@ -63,7 +68,7 @@ const clusterize = (text: string): Cluster[] => {
 };
 
 /**
- * 貪婪換行實際數行數。
+ * 貪婪換行實際數行數(豎排時是列數)。
  *
  * 不用 ⌈總字數 ÷ 每行字數⌉ —— 那個公式假設可以在任意字之間斷行,
  * 有了 cluster 之後就不成立了:一個 2 字寬的 cluster 塞不進行末剩的 1 格,
@@ -88,7 +93,7 @@ const countLines = (clusters: Cluster[], perLine: number): number => {
  * 字級下限有兩道:
  *
  * MIN_R  美觀下限。正常引文不該小於這個,再小就不像「一張可以截圖收藏的卡」了。
- * HARD_R 物理下限。超長引文(3:4 約 125 字以上)連 MIN_R 都裝不下時才會用到。
+ * HARD_R 物理下限。超長引文連 MIN_R 都裝不下時才會用到。
  *
  * 分兩道的原因:舊版只有一道,而且是無條件 `return min` ——
  * 裝不下也照樣回傳,正文就靜靜地溢出版心、壓到落款上、長到出畫,
@@ -97,22 +102,32 @@ const countLines = (clusters: Cluster[], perLine: number): number => {
 const MIN_R = 0.055;
 const HARD_R = 0.032;
 
+/** 豎排時落款自成一列,要從正文可用寬度裡先扣掉。 */
+const attrColumn = (width: number) =>
+  Math.round(width * 0.037 * 1.6 + width * 0.03);
+
 export const autoFontSize = (
   text: string,
   width: number,
   height: number,
-  still = false
+  still = false,
+  vertical = false
 ): number => {
-  const L = still ? LAYOUT.still : LAYOUT.video;
-  const boxW = width * (1 - MARGIN_R * 2);
-  const availH = height * L.textH;
+  const L = layoutOf(still, vertical);
   const tracking = Math.round(width * 0.0028);
   const clusters = clusterize(text.replace(/\s/g, ""));
 
+  // along  = 文字流動方向上的可用長度
+  // across = 行 / 列堆疊方向上的可用長度
+  const along = vertical ? height * L.along : width * (1 - MARGIN_R * 2);
+  const across = vertical
+    ? width * (1 - MARGIN_R * 2) - attrColumn(width)
+    : height * L.along;
+
   const fits = (size: number): boolean => {
-    const perLine = Math.floor(boxW / (size + tracking));
-    if (perLine < 2) return false; // 一行放不下一個 cluster
-    return countLines(clusters, perLine) * size * LINE_H <= availH;
+    const per = Math.floor(along / (size + tracking));
+    if (per < 2) return false; // 一行放不下一個 cluster
+    return countLines(clusters, per) * size * LINE_H <= across;
   };
 
   const max = Math.round(width * L.maxR);
@@ -137,10 +152,20 @@ export const FullQuoteCard: React.FC<{
   startFrame: number;
   absFrame: number;
   still?: boolean;
-}> = ({ text, attribution, theme, startFrame, absFrame, still = false }) => {
+  /** 豎排。由 quote json 的 vertical 欄位經 manifest 傳進來。 */
+  vertical?: boolean;
+}> = ({
+  text,
+  attribution,
+  theme,
+  startFrame,
+  absFrame,
+  still = false,
+  vertical = false,
+}) => {
   const { width, height } = useVideoConfig();
-  const L = still ? LAYOUT.still : LAYOUT.video;
-  const size = autoFontSize(text, width, height, still);
+  const L = layoutOf(still, vertical);
+  const size = autoFontSize(text, width, height, still, vertical);
   const tracking = Math.round(width * 0.0028);
   const clusters = clusterize(text);
   const perChar = still ? 0 : 1.6;
@@ -149,6 +174,79 @@ export const FullQuoteCard: React.FC<{
   const totalChars = Array.from(text).length;
   const attrAt = startFrame + totalChars * perChar + 10;
   const attrStyle = still ? { opacity: 1 } : pressStyle(absFrame, attrAt, 8);
+
+  const body = clusters.map((c) => (
+    <span
+      key={c.at}
+      style={{
+        display: "inline-block",
+        whiteSpace: "nowrap", // cluster 內部絕不斷行 —— 這就是禁則本身
+        ...(still
+          ? { opacity: 1 }
+          : pressStyle(absFrame, startFrame + c.at * perChar, 5)),
+      }}
+    >
+      {c.text}
+    </span>
+  ));
+
+  const textStyle: React.CSSProperties = {
+    fontFamily: theme.font,
+    fontSize: size,
+    lineHeight: LINE_H,
+    letterSpacing: tracking,
+    color: theme.ink,
+  };
+
+  const attrTextStyle: React.CSSProperties = {
+    fontFamily: theme.font,
+    fontSize: Math.round(width * 0.037),
+    letterSpacing: 2,
+    color: theme.inkDeep,
+    ...attrStyle,
+  };
+
+  if (vertical) {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          // row-reverse:第一個 child 在最右邊。豎排由右向左讀,
+          // 所以正文在右、落款在左,順序與閱讀方向一致。
+          flexDirection: "row-reverse",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: `0 ${width * MARGIN_R}px`,
+          paddingBottom: height * L.bottom,
+          mixBlendMode: "multiply",
+        }}
+      >
+        <div
+          style={{
+            ...textStyle,
+            writingMode: "vertical-rl",
+            // 明確給高度才會自動折列 —— 少了這行整句會排成一長條衝出畫面
+            height: height * L.along,
+          }}
+        >
+          {body}
+        </div>
+        <div
+          style={{
+            ...attrTextStyle,
+            writingMode: "vertical-rl",
+            // 落款貼著正文下緣起排,像線裝書的牌記
+            alignSelf: "flex-end",
+            marginRight: width * 0.03,
+          }}
+        >
+          {attribution}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -163,41 +261,12 @@ export const FullQuoteCard: React.FC<{
         mixBlendMode: "multiply",
       }}
     >
+      <div style={{ ...textStyle, textAlign: "left" }}>{body}</div>
       <div
         style={{
-          fontFamily: theme.font,
-          fontSize: size,
-          lineHeight: LINE_H,
-          letterSpacing: tracking,
-          color: theme.ink,
-          textAlign: "left",
-        }}
-      >
-        {clusters.map((c) => (
-          <span
-            key={c.at}
-            style={{
-              display: "inline-block",
-              whiteSpace: "nowrap", // cluster 內部絕不斷行 —— 這就是禁則本身
-              ...(still
-                ? { opacity: 1 }
-                : pressStyle(absFrame, startFrame + c.at * perChar, 5)),
-            }}
-          >
-            {c.text}
-          </span>
-        ))}
-      </div>
-
-      <div
-        style={{
+          ...attrTextStyle,
           marginTop: height * 0.033,
           textAlign: "right",
-          fontFamily: theme.font,
-          fontSize: Math.round(width * 0.037),
-          letterSpacing: 2,
-          color: theme.inkDeep,
-          ...attrStyle,
         }}
       >
         {attribution}

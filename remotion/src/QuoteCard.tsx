@@ -14,7 +14,7 @@ export const QuoteCard: React.FC<{ manifest: any }> = ({ manifest }) => {
 
   return (
     <AbsoluteFill>
-      <PaperBase theme={theme} still />
+      <PaperBase theme={theme} still seed={manifest.id} />
       <FullQuoteCard
         text={manifest.fullText}
         attribution={manifest.attribution}
@@ -22,6 +22,7 @@ export const QuoteCard: React.FC<{ manifest: any }> = ({ manifest }) => {
         startFrame={0}
         absFrame={0}
         still
+        vertical={manifest.vertical}
       />
       <div
         style={{

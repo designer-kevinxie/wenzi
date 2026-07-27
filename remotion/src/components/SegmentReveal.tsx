@@ -12,9 +12,20 @@ export type Segment = {
 
 /**
  * 正文 —— 逐段替換(不累積)。
- * 中文逐字壓印,英文整行延遲淡入(逐字會很吵),透明度 0.75 建立層級。
- * 段末停頓後整段淡出 6 幀,下一段壓入。
+ * 中文逐字壓印,段末停頓後整段淡出 6 幀,下一段壓入。
  */
+
+/**
+ * 英譯是否上畫面。
+ *
+ * 關掉了,但 quote json 與 manifest 裡的 en 欄位**照常生成、照常保留** ——
+ * 英譯和分段是同一次模型呼叫的產物,關掉顯示一分錢也省不了,
+ * 而留著資料代表以後要做英文帳號時,存量引文不必重跑。
+ *
+ * 要開回來就把這裡改成 true,排版與淡入時序都原封不動。
+ */
+const SHOW_EN = false;
+
 export const SegmentReveal: React.FC<{
   segments: Segment[];
   theme: Theme;
@@ -72,7 +83,7 @@ export const SegmentReveal: React.FC<{
               ))}
             </div>
 
-            {seg.en ? (
+            {SHOW_EN && seg.en ? (
               <div
                 style={{
                   fontFamily: theme.fontEn,
