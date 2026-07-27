@@ -171,7 +171,17 @@ cd remotion && npm run dev
 `new.py` 一次一句,適合精修。累積了一批句子想一口氣跑完時用 `batch.py`——
 句子存在 Google Sheet 裡,手機隨手記,回到電腦一條命令跑完整批。
 
-`Google Sheet batch.py releases/ ────────────── ───────────────────── ───────── 待做的句子 ──→ 抓待做行 │ 標記 processing ──回寫──→ 你在手機上看得到進度 new.py → quote json publish.py → 出片 ▼ 回寫 done / error ──→ 成品`
+### 運作方式
+
+```
+Google Sheet          batch.py                      releases/
+──────────────        ──────────────────────        ─────────
+待做的句子      ──→   抓待做行                          │
+                      標記 processing  ──回寫──→   你在手機上看得到進度
+                      new.py     → quote json
+                      publish.py → 出片                ▼
+                      回寫 done / error  ──→        成品
+```
 
 狀態即時回寫,所以跑的時候手機打開 Sheet 就能看到每一句的進度。
 中途出錯不會中斷整批,該行標成 `error` 並附上原因,繼續跑下一句。
@@ -212,9 +222,9 @@ python3 batch.py --no-meta    # 不生成文案,更快
 
 建議先 `--dry` 看一眼清單再正式跑。一批跑下來配音是實際消耗,不像調排版那樣免費。
 
-### 運作方式
+---
 
-## 7個腳本
+## 七個腳本
 
 ### `new.py` — 一句話 → quote json
 
@@ -302,39 +312,38 @@ python3 add_music.py other.mp3  # 指定別的檔名
 {
   "id": "camus_love_001",
   "lang": "zh",
-  "book": "重返提帕萨", // 可留空,留空則語音只讀作者名
+  "book": "重返提帕萨",              // 可留空,留空則語音只讀作者名
   "author": "加缪",
-  "segments": [
-    // 斷句是編輯決策,中英手動對應
-    {
-      "zh": "不被爱仅是时运不济，",
-      "en": "To be unloved is merely a stroke of misfortune,",
-    },
-    {
-      "zh": "而无力去爱才是真正的灾难。",
-      "en": "but the inability to love is the true catastrophe.",
-    },
+  "segments": [                      // 斷句是編輯決策,中英手動對應
+    { "zh": "不被爱仅是时运不济，",
+      "en": "To be unloved is merely a stroke of misfortune," },
+    { "zh": "而无力去爱才是真正的灾难。",
+      "en": "but the inability to love is the true catastrophe." }
   ],
-  "traditional": "s2tw", // 見下方
+  "traditional": "s2tw",             // 見下方
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",
     "voice_id": "你的 voice_id",
-    "model_id": "eleven_v3", // 或 eleven_multilingual_v2(較穩定)
-    "stability": 0.0, // v3 只吃 0.0 / 0.5 / 1.0
+    "model_id": "eleven_v3",         // 或 eleven_multilingual_v2(較穩定)
+    "stability": 0.0                 // v3 只吃 0.0 / 0.5 / 1.0
   },
-  "title_tts_text": "[somber] 重返提帕薩，加繆。", // 朗讀專用,可加 v3 標籤
+  "title_tts_text": "[somber] 重返提帕薩，加繆。",   // 朗讀專用,可加 v3 標籤
   "timing": {
-    "hook_sec": 4.0, // hook.mp4 的實際長度
-    "title_overlap_sec": 1.0, // 書名提前壓在鉤子尾巴上的秒數
-    "seg_gap_sec": 0.45, // 只影響最後一段的停留
-    "full_sec": 6.0, // 完整句幕停留(給人截圖)
+    "hook_sec": 4.0,                 // hook.mp4 的實際長度
+    "title_overlap_sec": 1.0,        // 書名提前壓在鉤子尾巴上的秒數
+    "seg_gap_sec": 0.45,             // 只影響最後一段的停留
+    "full_sec": 6.0                  // 完整句幕停留(給人截圖)
   },
   "theme": { "paper": "#f3ede1", "ink": "#0e5d2d" },
-  "music": "bgm.mp3", // 背景音樂檔名,放 remotion/public/;不要音樂設 null
-  "safeMode": true, // 見下方
+  "music": "bgm.mp3",                // 見下方;不要背景音樂就設成 null
+  "safeMode": true
 }
 ```
+
+> 上面是 JSONC(帶註解)方便閱讀。實際的 `quotes/*.json` 是純 JSON,
+> **不能有註解,也不能有結尾逗號**——`json.loads` 會直接拒絕。
+> 用 Prettier 之類的工具格式化 README 時要留意這一段。
 
 ### 繁體轉換模式
 
@@ -361,6 +370,7 @@ python3 add_music.py other.mp3  # 指定別的檔名
 `music` 指向 `remotion/public/` 裡的檔名,全程 loop 墊在旁白底下。
 音量在 `BgMusic.tsx` 裡調——這是刻意寫死的,不放進 quote json,
 因為音量是整個帳號的聽感統一設定,不該一則一則調。
+
 設成 `null` 則完全沒有背景音樂,只有旁白與鉤子影片的原聲。
 
 ---
