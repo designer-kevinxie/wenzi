@@ -13,8 +13,8 @@
       "en": "while the inability to love is the true calamity."
     }
   ],
-  "traditional": null,
-"vertical": true,
+  "traditional": "s2tw",
+  "vertical": true,
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",

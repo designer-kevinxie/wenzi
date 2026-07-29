@@ -274,7 +274,7 @@ def main():
         "book": g.get("book", book),
         "author": g.get("author", author),
         "segments": segments,
-        "traditional": None,
+        "traditional": "s2tw",
         "hook_video": "hook.mp4",
         "tts": tts,
         "title_tts_text": g.get("title_tts", ""),

@@ -31,7 +31,7 @@ const DRIFT = 0; // px,全片位移總量;設 0 則完全靜止
  * 只有一張紙時填一個元素即可,行為和以前完全一樣。
  * 紙紋要同源(同一批掃描、同樣色溫),否則帳號會看起來像換了主人。
  */
-const PAPERS = ["paper.jpg", "paper-2.jpg", "paper-3.jpg"];
+const PAPERS = ["paper.jpg"];
 
 /** theme.ts 裡 texture 的預設值。等於這個值代表「沒有特別指定」→ 自動輪換。 */
 const DEFAULT_TEXTURE = "paper.jpg";
