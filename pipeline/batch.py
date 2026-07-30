@@ -1,7 +1,8 @@
 """
 batch.py — 從 Google Sheet 佇列批次出片。
 
-    python3 batch.py                # 處理所有待做的句子
+    python3 batch.py                # 處理所有待做的句子(預設只出靜圖,不渲影片)
+    python3 batch.py --with-video   # 連影片一起渲(目前只發小紅書圖文,平時用不到)
     python3 batch.py --limit 5      # 只處理前 5 句
     python3 batch.py --no-meta      # 不生成文案(更快)
     python3 batch.py --dry          # 只列出待做,不出片
@@ -81,7 +82,7 @@ def write_back(updates):
         print(f"  ! 回寫 Sheet 失敗(不影響出片):{e}")
 
 
-def run_one(item, want_meta: bool) -> tuple[bool, str]:
+def run_one(item, want_meta: bool, with_video: bool) -> tuple[bool, str]:
     """跑 new.py(不 --go)拿到 slug,再跑 publish.py。回傳 (成功, 訊息)。"""
     # text 原樣傳入,author / book 走獨立參數 —— new.py 收到明確的
     # --author / --book 就不會再從句尾猜署名,詩歌末行(「——对自己的爱」
@@ -105,10 +106,13 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
         return False, "找不到生成的 quote json(new.py 可能校驗失敗)"
     qpath = m.group(0)
 
-    # publish
+    # publish —— 預設 --card-only:目前只發小紅書圖文,影片鏈路還沒鋪開,
+    # 每次批量都渲一份用不上的 mp4 只是白佔硬碟(releases/ 不會自動清)。
     cmd = [sys.executable, "publish.py", qpath]
     if want_meta:
         cmd.append("--meta")
+    if not with_video:
+        cmd.append("--card-only")
     p2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p2.stdout[-500:])
     if p2.returncode != 0:
@@ -116,7 +120,8 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
 
     slug = Path(qpath).stem
     stamp = date.today().strftime("%Y%m%d")
-    return True, f"{stamp}_{slug}_001.mp4"
+    name = f"{stamp}_{slug}_001"
+    return True, f"{name}.mp4" if with_video else f"{name}_card.png"
 
 
 def main():
@@ -125,6 +130,7 @@ def main():
 
     args = sys.argv[1:]
     want_meta = "--no-meta" not in args
+    with_video = "--with-video" in args
     dry = "--dry" in args
     limit = None
     if "--limit" in args:
@@ -160,7 +166,7 @@ def main():
         print(f"\n{'='*50}\n▶ 第 {row} 行:{preview}…")
         write_back([{"row": row, "status": "processing"}])
         try:
-            ok, msg = run_one(it, want_meta)
+            ok, msg = run_one(it, want_meta, with_video)
         except Exception:
             ok, msg = False, traceback.format_exc()[-200:]
 

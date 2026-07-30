@@ -218,13 +218,17 @@ Sheet 那邊靠一支 Apps Script Web App 提供介面,契約如下:
 
 ```bash
 cd pipeline
-python3 batch.py              # 處理所有待做的句子
+python3 batch.py              # 處理所有待做的句子(預設只出靜圖,不渲影片)
+python3 batch.py --with-video # 連影片一起渲(目前只發小紅書圖文,平時用不到)
 python3 batch.py --dry        # 只列出待做,不出片(先確認清單)
 python3 batch.py --limit 5    # 只跑前 5 句
 python3 batch.py --no-meta    # 不生成文案,更快
 ```
 
 建議先 `--dry` 看一眼清單再正式跑。一批跑下來配音是實際消耗,不像調排版那樣免費。
+
+> 預設不渲影片是因為目前只發小紅書圖文,影片鏈路能跑但沒地方發,渲了也只是
+> 白佔硬碟(見「成本」一節)。哪天開始鋪視頻號/抖音,加 `--with-video` 就好。
 
 ---
 

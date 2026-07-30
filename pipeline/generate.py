@@ -141,12 +141,13 @@ def split_words_by_segment(words, segments):
 # ---------------------------------------------------------------- main
 
 def main(quote_path: str):
-    quote = convert_quote(json.loads(Path(quote_path).read_text(encoding="utf-8")))
+    raw = json.loads(Path(quote_path).read_text(encoding="utf-8"))
+    quote = convert_quote(raw)
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     provider = PROVIDERS[quote["tts"]["provider"]]
     t = {**DEFAULTS, **quote.get("timing", {})}
 
-    segments = quote["segments"]
+    segments = quote["segments"]  # 繁體,給字幕顯示用
     body_text = "".join(s["zh"] for s in segments)
 
     # ---- 1. 書名(無書名則讀作者)
@@ -156,16 +157,19 @@ def main(quote_path: str):
     # 而且音譯人名/地名本來就容易讀錯,少讀一個少一處風險。
     # 畫面上書名與作者都還在,只是聲音更簡潔。
     spoken_title = book if book else author
-    # 朗讀用簡體:ElevenLabs 中文以簡體訓練為主,繁體多音字更容易讀錯。
-    # 顯示仍是繁體(convert_quote 已轉),這裡只把送 TTS 的文本轉回簡體。
-    title_read = to_simplified(
-        quote.get("title_tts_text") or f"[somber] {spoken_title}。"
-    )
+    # 朗讀直接吃 raw(quote json 原本的簡體欄位),不要「轉繁體(convert_quote)
+    # 再轉回簡體(to_simplified)」—— s2tw 是有損轉換,部分字一對多,
+    # 來回轉偶爾會變成另一個同形異音字,送進 TTS 就讀錯音(如「憶」被讀走音)。
+    raw_book = raw.get("book", "").strip()
+    raw_author = raw.get("author", "").strip()
+    raw_spoken_title = raw_book if raw_book else raw_author
+    title_read = raw.get("title_tts_text") or f"[somber] {raw_spoken_title}。"
     print("title:", spoken_title)
     tvo = cached_tts(provider, title_read, quote["lang"], quote["tts"], PUBLIC_DIR / "vo_title.mp3")
 
     # ---- 2. 正文(一次生成,保住朗讀氣口)
-    body_read = to_simplified(quote.get("body_tts_text", body_text))
+    raw_body_text = "".join(s["zh"] for s in raw["segments"])
+    body_read = raw.get("body_tts_text", raw_body_text)
     print("body :", body_text[:24], "...")
     bvo = cached_tts(provider, body_read, quote["lang"], quote["tts"], PUBLIC_DIR / "vo_body.mp3")
 
