@@ -337,7 +337,7 @@ python3 add_music.py other.mp3  # 指定別的檔名
   },
   "theme": { "paper": "#f3ede1", "ink": "#0e5d2d" },
   "music": "bgm.mp3",                // 見下方;不要背景音樂就設成 null
-  "safeMode": true
+  "safeMode": true                   // 寫入 manifest.json,但目前沒有元件讀取,先保留欄位
 }
 ```
 
