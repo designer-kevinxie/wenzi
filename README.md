@@ -190,11 +190,12 @@ Google Sheet          batch.py                      releases/
 
 | 欄位     | 說明                                                    |
 | -------- | ------------------------------------------------------- |
-| `text`   | 引文本體。詩歌可以直接換行,不會被當成分隔符             |
-| `author` | 作者,可留空                                             |
-| `book`   | 書名,不用加書名號,程式會加                              |
-| `status` | 留空 = 待做。程式會寫入 `processing` / `done` / `error` |
-| `note`   | 程式回寫:成功寫成品檔名,失敗寫錯誤原因                  |
+| `text`     | 引文本體。詩歌可以直接換行,不會被當成分隔符             |
+| `author`   | 作者,可留空                                             |
+| `book`     | 書名,不用加書名號,程式會加                              |
+| `vertical` | 留空 = 橫排。填 `是` / `TRUE` / `竖排` 等(見 `batch.py` 的 `TRUTHY`)= 豎排,適合詩歌 |
+| `status`   | 留空 = 待做。程式會寫入 `processing` / `done` / `error` |
+| `note`     | 程式回寫:成功寫成品檔名,失敗寫錯誤原因                  |
 
 > `text` / `author` / `book` 是分開傳給 `new.py` 的(`--author` / `--book`),
 > 不是拼成一句再解析。這樣詩歌內部的破折號、換行不會被誤判成署名分隔符,
@@ -204,11 +205,14 @@ Google Sheet          batch.py                      releases/
 
 Sheet 那邊靠一支 Apps Script Web App 提供介面,契約如下:
 
-- **GET** `?token=<TOKEN>` → `{"pending": [{"row": 3, "text": "...", "author": "...", "book": "..."}]}`
+- **GET** `?token=<TOKEN>` → `{"pending": [{"row": 3, "text": "...", "author": "...", "book": "...", "vertical": "是"}]}`
 - **POST** `{"token": "<TOKEN>", "updates": [{"row": 3, "status": "done", "note": "..."}]}`
 
 部署時「執行身分」選自己、「存取權」選任何人,拿到的 `/exec` 網址填進 `.env` 的
 `SHEET_WEBAPP_URL`。`TOKEN` 兩邊要一致,是唯一的存取控制。
+
+> `vertical` 欄不是必須的 —— Apps Script 沒回這個欄位時,`batch.py` 的
+> `clean_item()` 會把它當成空字串,等同橫排,不影響既有的 Sheet。
 
 ### 用法
 
@@ -233,6 +237,7 @@ python3 new.py "引文" --author 加缪 --book 重返提帕萨
 python3 new.py "引文。——加缪《重返提帕萨》"     # 作者出處可黏在句尾
 python3 new.py "引文" --voice <voice_id>         # 指定音色
 python3 new.py "引文" --go                       # 生成後直接出片
+python3 new.py "詩……" --vertical                # 豎排(適合詩歌),寫入 quote json 的 vertical 欄位
 ```
 
 模型負責:分段(依語氣停頓,不按字數硬切)、逐段英譯、生成 slug、朗讀用書名句。
@@ -337,7 +342,8 @@ python3 add_music.py other.mp3  # 指定別的檔名
   },
   "theme": { "paper": "#f3ede1", "ink": "#0e5d2d" },
   "music": "bgm.mp3",                // 見下方;不要背景音樂就設成 null
-  "safeMode": true                   // 寫入 manifest.json,但目前沒有元件讀取,先保留欄位
+  "safeMode": true,                  // 寫入 manifest.json,但目前沒有元件讀取,先保留欄位
+  "vertical": false                  // 豎排,適合詩歌;只影響完整句幕與靜圖卡片,正文逐段展示仍是橫排
 }
 ```
 

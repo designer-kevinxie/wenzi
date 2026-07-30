@@ -35,6 +35,9 @@ TOKEN = os.environ.get("SHEET_TOKEN", "")
 RELEASES = ROOT.parent / "releases"
 
 
+TRUTHY = {"true", "1", "yes", "y", "是", "竖排", "豎排", "✓", "√"}
+
+
 def clean_item(item: dict) -> dict:
     """把 Sheet 一行清成乾淨的欄位。
 
@@ -43,7 +46,11 @@ def clean_item(item: dict) -> dict:
 
     text 保留詩歌換行(收成單一換行),只清行首行尾空白:
     斷句要參考原本的分行,不能壓成一行。
+
+    vertical 來自 Sheet 的「竖排」欄(布林或文字皆可,見 TRUTHY),
+    決定這句要不要豎排 —— 詩歌類文字常用。
     """
+    vertical = item.get("vertical")
     return {
         **item,
         "text": "\n".join(
@@ -51,6 +58,7 @@ def clean_item(item: dict) -> dict:
         ),
         "author": (item.get("author") or "").strip().lstrip("—–-").strip(),
         "book": (item.get("book") or "").strip().strip("《》「」『』").strip(),
+        "vertical": vertical is True or str(vertical).strip().lower() in TRUTHY,
     }
 
 
@@ -83,6 +91,8 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
         cmd += ["--author", item["author"]]
     if item["book"]:
         cmd += ["--book", item["book"]]
+    if item["vertical"]:
+        cmd += ["--vertical"]
 
     p = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p.stdout)
@@ -134,7 +144,8 @@ def main():
         # 多行的詩收成一行顯示,清單才看得清楚(實際傳給 new.py 的仍是多行)
         preview = " / ".join(it["text"].splitlines())[:36]
         tag = f"《{it['book']}》" if it["book"] else (it["author"] or "")
-        print(f"  [{it['row']}] {preview}  {tag}")
+        mark = "  [豎排]" if it["vertical"] else ""
+        print(f"  [{it['row']}] {preview}  {tag}{mark}")
 
     if dry:
         print("\n(--dry 模式,不出片)")

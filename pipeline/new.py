@@ -23,6 +23,7 @@ new.py — 一句話 → 可直接出片的 quote json。
 選項:
     --go        生成後立刻跑 publish.py 出片
     --voice ID  指定 voice_id(預設沿用 quotes/ 裡最近一份的設定)
+    --vertical  標記為豎排(適合詩歌);寫入 quote json 的 vertical 欄位
 """
 
 import json
@@ -283,6 +284,7 @@ def main():
         "theme": theme,
         "music": "bgm.mp3",
         "safeMode": True,
+        "vertical": "--vertical" in flags,
     }
 
     out = QUOTES / f"{slug}.json"
