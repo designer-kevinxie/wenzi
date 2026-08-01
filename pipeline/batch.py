@@ -1,7 +1,8 @@
 """
 batch.py — 從 Google Sheet 佇列批次出片。
 
-    python3 batch.py                # 處理所有待做的句子
+    python3 batch.py                # 處理所有待做的句子(預設只出靜圖,不渲影片)
+    python3 batch.py --with-video   # 連影片一起渲(目前只發小紅書圖文,平時用不到)
     python3 batch.py --limit 5      # 只處理前 5 句
     python3 batch.py --no-meta      # 不生成文案(更快)
     python3 batch.py --dry          # 只列出待做,不出片
@@ -27,12 +28,17 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from publish import safe_part
+
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
 
 URL = os.environ.get("SHEET_WEBAPP_URL", "")
 TOKEN = os.environ.get("SHEET_TOKEN", "")
 RELEASES = ROOT.parent / "releases"
+
+
+TRUTHY = {"true", "1", "yes", "y", "是", "竖排", "豎排", "✓", "√"}
 
 
 def clean_item(item: dict) -> dict:
@@ -43,7 +49,11 @@ def clean_item(item: dict) -> dict:
 
     text 保留詩歌換行(收成單一換行),只清行首行尾空白:
     斷句要參考原本的分行,不能壓成一行。
+
+    vertical 來自 Sheet 的「竖排」欄(布林或文字皆可,見 TRUTHY),
+    決定這句要不要豎排 —— 詩歌類文字常用。
     """
+    vertical = item.get("vertical")
     return {
         **item,
         "text": "\n".join(
@@ -51,6 +61,7 @@ def clean_item(item: dict) -> dict:
         ),
         "author": (item.get("author") or "").strip().lstrip("—–-").strip(),
         "book": (item.get("book") or "").strip().strip("《》「」『』").strip(),
+        "vertical": vertical is True or str(vertical).strip().lower() in TRUTHY,
     }
 
 
@@ -73,7 +84,7 @@ def write_back(updates):
         print(f"  ! 回寫 Sheet 失敗(不影響出片):{e}")
 
 
-def run_one(item, want_meta: bool) -> tuple[bool, str]:
+def run_one(item, want_meta: bool, with_video: bool) -> tuple[bool, str]:
     """跑 new.py(不 --go)拿到 slug,再跑 publish.py。回傳 (成功, 訊息)。"""
     # text 原樣傳入,author / book 走獨立參數 —— new.py 收到明確的
     # --author / --book 就不會再從句尾猜署名,詩歌末行(「——对自己的爱」
@@ -83,6 +94,8 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
         cmd += ["--author", item["author"]]
     if item["book"]:
         cmd += ["--book", item["book"]]
+    if item["vertical"]:
+        cmd += ["--vertical"]
 
     p = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p.stdout)
@@ -95,18 +108,27 @@ def run_one(item, want_meta: bool) -> tuple[bool, str]:
         return False, "找不到生成的 quote json(new.py 可能校驗失敗)"
     qpath = m.group(0)
 
-    # publish
+    # publish —— 預設 --card-only:目前只發小紅書圖文,影片鏈路還沒鋪開,
+    # 每次批量都渲一份用不上的 mp4 只是白佔硬碟(releases/ 不會自動清)。
     cmd = [sys.executable, "publish.py", qpath]
     if want_meta:
         cmd.append("--meta")
+    if not with_video:
+        cmd.append("--card-only")
     p2 = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(p2.stdout[-500:])
     if p2.returncode != 0:
         return False, (p2.stderr or p2.stdout)[-200:].strip()
 
-    slug = Path(qpath).stem
+    # 檔名組法要跟 publish.py 的歸檔邏輯對得上(作者/書名 + slug),
+    # 不然回寫 Sheet 的 note 跟 releases/ 裡實際的檔名對不起來。
+    quote = json.loads((ROOT / qpath).read_text(encoding="utf-8"))
+    qid = quote.get("id") or Path(qpath).stem
+    name_bits = [b for b in (safe_part(quote.get("author", "")),
+                              safe_part(quote.get("book", ""))) if b]
     stamp = date.today().strftime("%Y%m%d")
-    return True, f"{stamp}_{slug}_001.mp4"
+    base = f"{stamp}_{'_'.join(name_bits + [qid])}" if name_bits else f"{stamp}_{qid}"
+    return True, f"{base}.mp4" if with_video else f"{base}_card.png"
 
 
 def main():
@@ -115,6 +137,7 @@ def main():
 
     args = sys.argv[1:]
     want_meta = "--no-meta" not in args
+    with_video = "--with-video" in args
     dry = "--dry" in args
     limit = None
     if "--limit" in args:
@@ -134,7 +157,8 @@ def main():
         # 多行的詩收成一行顯示,清單才看得清楚(實際傳給 new.py 的仍是多行)
         preview = " / ".join(it["text"].splitlines())[:36]
         tag = f"《{it['book']}》" if it["book"] else (it["author"] or "")
-        print(f"  [{it['row']}] {preview}  {tag}")
+        mark = "  [豎排]" if it["vertical"] else ""
+        print(f"  [{it['row']}] {preview}  {tag}{mark}")
 
     if dry:
         print("\n(--dry 模式,不出片)")
@@ -149,7 +173,7 @@ def main():
         print(f"\n{'='*50}\n▶ 第 {row} 行:{preview}…")
         write_back([{"row": row, "status": "processing"}])
         try:
-            ok, msg = run_one(it, want_meta)
+            ok, msg = run_one(it, want_meta, with_video)
         except Exception:
             ok, msg = False, traceback.format_exc()[-200:]
 

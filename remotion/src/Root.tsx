@@ -1,6 +1,7 @@
 import { Composition, Still } from "remotion";
 import { LiteraryQuote } from "./LiteraryQuote";
 import { QuoteCard } from "./QuoteCard";
+import { Wallpaper } from "./Wallpaper";
 import manifest from "../public/manifest.json";
 
 export const RemotionRoot: React.FC = () => {
@@ -27,6 +28,14 @@ export const RemotionRoot: React.FC = () => {
       <Still
         id="QuoteCardTall"
         component={QuoteCard}
+        width={1080}
+        height={1920}
+        defaultProps={{ manifest }}
+      />
+      {/* 鎖屏壁紙,暗色 */}
+      <Still
+        id="Wallpaper"
+        component={Wallpaper}
         width={1080}
         height={1920}
         defaultProps={{ manifest }}

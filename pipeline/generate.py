@@ -4,11 +4,19 @@ generate.py — 一則引文 → manifest.json + 兩條配音.
 用法:
     export ELEVENLABS_API_KEY=xxx      (或放 .env)
     python3 generate.py quotes/hesse_summer.json
+    python3 generate.py quotes/hesse_summer.json --text-only  # 不配音,只出靜圖要的欄位
 
 產出至 ../remotion/public/:
     manifest.json   給 Remotion 讀的唯一契約
-    vo_title.mp3    書名(或作者名)朗讀
-    vo_body.mp3     正文朗讀(整段一次生成,事後按段切時間軸)
+    vo_title.mp3    書名(或作者名)朗讀(--text-only 不產生)
+    vo_body.mp3     正文朗讀(整段一次生成,事後按段切時間軸;--text-only 不產生)
+
+--text-only:靜圖(QuoteCard/QuoteCardTall)不讀配音、不讀逐字時間戳,
+只需要 fullText / attribution / theme 這幾個欄位。這個模式完全跳過
+cached_tts,不會打 ElevenLabs API。durationInFrames 只是用字數粗估,
+給 Remotion 的 <Composition> prop 過驗證用,不追求準 —— 這份 manifest
+不會拿去渲影片。之後要渲影片時正常重跑 generate.py(不加這個旗標)
+就會蓋掉,拿到真正的配音時間軸。
 
 幕次:
     0        鉤子影片(你自己做的 hook.mp4,含人聲)
@@ -140,32 +148,63 @@ def split_words_by_segment(words, segments):
 
 # ---------------------------------------------------------------- main
 
-def main(quote_path: str):
-    quote = convert_quote(json.loads(Path(quote_path).read_text(encoding="utf-8")))
+def main(quote_path: str, text_only: bool = False):
+    raw = json.loads(Path(quote_path).read_text(encoding="utf-8"))
+    quote = convert_quote(raw)
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
-    provider = PROVIDERS[quote["tts"]["provider"]]
     t = {**DEFAULTS, **quote.get("timing", {})}
 
-    segments = quote["segments"]
+    segments = quote["segments"]  # 繁體,給字幕顯示用
     body_text = "".join(s["zh"] for s in segments)
-
-    # ---- 1. 書名(無書名則讀作者)
     book = quote.get("book", "").strip()
     author = quote.get("author", "").strip()
+    attribution = f"－《{book}》{author}" if book else f"－{author}"
+
+    if text_only:
+        # 粗估:中文口語約 4 字/秒,只求給個合法的正整數幀數,不追求準確
+        est_sec = (t["hook_sec"] + len(body_text) / 4 + len(segments) * t["seg_gap_sec"]
+                   + t["title_tail_sec"] + t["body_tail_sec"] + t["full_sec"])
+        manifest = {
+            "fps": FPS, "width": 1080, "height": 1920,
+            "durationInFrames": sec2f(est_sec),
+            "hook": None,
+            "acts": {"title": {"from": 0, "to": 0}, "body": {"from": 0, "to": 0}, "full": {"from": 0, "to": 0}},
+            "audio": {"title": {"src": "", "startFrame": 0}, "body": {"src": "", "startFrame": 0}},
+            "header": {"book": book, "author": author},
+            "segments": [],
+            "fullText": body_text,
+            "attribution": attribution,
+            "theme": quote.get("theme", {}),
+            "music": quote.get("music"),
+            "safeMode": quote.get("safeMode", True),
+            "vertical": quote.get("vertical", False),
+            "id": quote.get("id", ""),
+        }
+        out = PUBLIC_DIR / "manifest.json"
+        out.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\n✓ {out}(--text-only,沒有配音)")
+        return
+
+    provider = PROVIDERS[quote["tts"]["provider"]]
+
+    # ---- 1. 書名(無書名則讀作者)
     # 有書名就只讀書名,沒有才讀作者 —— 兩個專有名詞連讀囉嗦,
     # 而且音譯人名/地名本來就容易讀錯,少讀一個少一處風險。
     # 畫面上書名與作者都還在,只是聲音更簡潔。
     spoken_title = book if book else author
-    # 朗讀用簡體:ElevenLabs 中文以簡體訓練為主,繁體多音字更容易讀錯。
-    # 顯示仍是繁體(convert_quote 已轉),這裡只把送 TTS 的文本轉回簡體。
-    title_read = to_simplified(
-        quote.get("title_tts_text") or f"[somber] {spoken_title}。"
-    )
+    # 朗讀直接吃 raw(quote json 原本的簡體欄位),不要「轉繁體(convert_quote)
+    # 再轉回簡體(to_simplified)」—— s2tw 是有損轉換,部分字一對多,
+    # 來回轉偶爾會變成另一個同形異音字,送進 TTS 就讀錯音(如「憶」被讀走音)。
+    raw_book = raw.get("book", "").strip()
+    raw_author = raw.get("author", "").strip()
+    raw_spoken_title = raw_book if raw_book else raw_author
+    title_read = raw.get("title_tts_text") or f"[somber] {raw_spoken_title}。"
     print("title:", spoken_title)
     tvo = cached_tts(provider, title_read, quote["lang"], quote["tts"], PUBLIC_DIR / "vo_title.mp3")
 
     # ---- 2. 正文(一次生成,保住朗讀氣口)
-    body_read = to_simplified(quote.get("body_tts_text", body_text))
+    raw_body_text = "".join(s["zh"] for s in raw["segments"])
+    body_read = raw.get("body_tts_text", raw_body_text)
     print("body :", body_text[:24], "...")
     bvo = cached_tts(provider, body_read, quote["lang"], quote["tts"], PUBLIC_DIR / "vo_body.mp3")
 
@@ -211,8 +250,6 @@ def main(quote_path: str):
     body_end = cursor + t["body_tail_sec"]
     full_end = body_end + t["full_sec"]
 
-    attribution = f"－《{book}》{author}" if book else f"－{author}"
-
     manifest = {
         "fps": FPS, "width": 1080, "height": 1920,
         "durationInFrames": sec2f(full_end),
@@ -245,4 +282,6 @@ def main(quote_path: str):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "quotes/hesse_summer.json")
+    args = sys.argv[1:]
+    path = next((a for a in args if not a.startswith("--")), "quotes/hesse_summer.json")
+    main(path, text_only="--text-only" in args)
