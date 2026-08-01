@@ -6,7 +6,7 @@ publish.py — 一條命令出片。
 流程:
     1. generate.py  配音 + manifest(有快取,重跑不花額度)
     2. remotion     渲染影片
-    3. remotion     導出靜圖卡片(3:4 給小紅書、9:16 給備用)
+    3. remotion     導出靜圖卡片(預設只出 3:4 小紅書圖;9:16 / 壁紙是備選,手動另加)
     4. 重命名歸檔到 releases/
 
 選項:
@@ -16,7 +16,11 @@ publish.py — 一條命令出片。
     --card-only     只出靜圖,不渲影片(改了卡片排版想重印時用)
     --no-card       不出靜圖
     --video-only    等同 --no-card
+    --with-tall     連 9:16 直式卡片一起出(平常用不到,備選格式)
     --open          出片後用 Finder 打開 releases 資料夾
+
+壁紙(Wallpaper composition)不在這條流程裡,想要時手動:
+    cd remotion && npm run wallpaper
 
 只想重印某一則的卡片:
 
@@ -27,6 +31,7 @@ publish.py — 一條命令出片。
 """
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -40,6 +45,11 @@ PROJECT = ROOT.parent                            # …/wenziji
 REMOTION = PROJECT / "remotion"
 RELEASES = PROJECT / "releases"
 MANIFEST = REMOTION / "public" / "manifest.json"
+
+
+def safe_part(s: str) -> str:
+    """檔名片段清一下,擋掉路徑分隔符之類的字元(作者/書名理論上不會有,防手滑)。"""
+    return re.sub(r'[\\/:*?"<>|]', "", s or "").strip()
 
 
 def run(cmd, cwd, label):
@@ -85,6 +95,7 @@ def main():
     copy_market = "overseas" if "tw" in args or "--copy=tw" in flags else "xiaohongshu"
     no_card = "--no-card" in flags or "--video-only" in flags
     card_only = "--card-only" in flags
+    with_tall = "--with-tall" in flags
 
     if card_only and no_card:
         sys.exit("✗ --card-only 和 --no-card 互相矛盾,只能挑一個")
@@ -95,7 +106,8 @@ def main():
     quote = json.loads(qfile.read_text(encoding="utf-8"))
     qid = quote.get("id") or qfile.stem
 
-    # 1. 配音 + manifest
+    # 1. 配音 + manifest —— --card-only 不渲影片,靜圖不吃配音/逐字時間戳,
+    # 這種情況讓 generate.py 用 --text-only 跳過 TTS,新句子才不會平白花配音額度。
     if skip_gen:
         if not manifest_matches(quote):
             sys.exit(
@@ -104,7 +116,12 @@ def main():
             )
         print("▶ 跳過 generate(--skip-gen,已確認 manifest 對得上)")
     else:
-        run([sys.executable, "generate.py", str(qfile)], ROOT, "生成配音與 manifest")
+        gen_cmd = [sys.executable, "generate.py", str(qfile)]
+        label = "生成配音與 manifest"
+        if card_only:
+            gen_cmd.append("--text-only")
+            label = "生成 manifest(--card-only,跳過配音)"
+        run(gen_cmd, ROOT, label)
 
     # 2. 影片
     if card_only:
@@ -112,22 +129,24 @@ def main():
     else:
         run(["npm", "run", "render"], REMOTION, "渲染影片")
 
-    # 3. 靜圖
+    # 3. 靜圖 —— 平常只發小紅書 3:4,9:16 是備選格式,加 --with-tall 才出
     if not no_card:
         run(["npm", "run", "card"], REMOTION, "導出卡片 3:4")
-        run(["npm", "run", "card:tall"], REMOTION, "導出卡片 9:16")
+        if with_tall:
+            run(["npm", "run", "card:tall"], REMOTION, "導出卡片 9:16")
 
-    # 4. 歸檔
+    # 4. 歸檔 —— 檔名夾帶作者/書名(中文),不然一排拼音 slug 很難憑檔名認出是哪則
     RELEASES.mkdir(exist_ok=True)
     stamp = date.today().strftime("%Y%m%d")
-    base = f"{stamp}_{qid}"
+    name_bits = [b for b in (safe_part(quote.get("author", "")),
+                              safe_part(quote.get("book", ""))) if b]
+    base = f"{stamp}_{'_'.join(name_bits + [qid])}" if name_bits else f"{stamp}_{qid}"
 
     moves = [] if card_only else [("out/video.mp4", f"{base}.mp4")]
     if not no_card:
-        moves += [
-            ("out/card.png", f"{base}_card.png"),
-            ("out/card-tall.png", f"{base}_card-tall.png"),
-        ]
+        moves.append(("out/card.png", f"{base}_card.png"))
+        if with_tall:
+            moves.append(("out/card-tall.png", f"{base}_card-tall.png"))
 
     print("\n▶ 歸檔")
     done = []

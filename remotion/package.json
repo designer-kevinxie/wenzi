@@ -5,7 +5,8 @@
     "dev": "remotion studio",
     "render": "remotion render LiteraryQuote out/video.mp4 --concurrency=2",
     "card": "remotion still QuoteCard out/card.png",
-    "card:tall": "remotion still QuoteCardTall out/card-tall.png"
+    "card:tall": "remotion still QuoteCardTall out/card-tall.png",
+    "wallpaper": "remotion still Wallpaper out/wallpaper.png"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.0",

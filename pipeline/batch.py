@@ -28,6 +28,8 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from publish import safe_part
+
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
 
@@ -118,10 +120,15 @@ def run_one(item, want_meta: bool, with_video: bool) -> tuple[bool, str]:
     if p2.returncode != 0:
         return False, (p2.stderr or p2.stdout)[-200:].strip()
 
-    slug = Path(qpath).stem
+    # 檔名組法要跟 publish.py 的歸檔邏輯對得上(作者/書名 + slug),
+    # 不然回寫 Sheet 的 note 跟 releases/ 裡實際的檔名對不起來。
+    quote = json.loads((ROOT / qpath).read_text(encoding="utf-8"))
+    qid = quote.get("id") or Path(qpath).stem
+    name_bits = [b for b in (safe_part(quote.get("author", "")),
+                              safe_part(quote.get("book", ""))) if b]
     stamp = date.today().strftime("%Y%m%d")
-    name = f"{stamp}_{slug}_001"
-    return True, f"{name}.mp4" if with_video else f"{name}_card.png"
+    base = f"{stamp}_{'_'.join(name_bits + [qid])}" if name_bits else f"{stamp}_{qid}"
+    return True, f"{base}.mp4" if with_video else f"{base}_card.png"
 
 
 def main():

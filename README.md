@@ -1,4 +1,4 @@
-# 文字紀 — 文學短片自動化管線
+# 文學短片自動化管線
 
 一句引文 → 配音、逐字壓印動畫、成片、靜圖卡片、三平台發布文案。
 
@@ -144,12 +144,15 @@ python3 new.py "引文。——作者《書名》" --go
 **產出在 `releases/`:**
 
 ```
-20260724_camus_love_001.mp4              影片
-20260724_camus_love_001_card.png         3:4 靜圖(小紅書)
-20260724_camus_love_001_card-tall.png    9:16 靜圖
-20260724_camus_love_001.json             引文資訊
-20260724_camus_love_001_meta.md          三平台發布文案
+20260724_加缪_重返提帕萨_camus_love_001.mp4              影片
+20260724_加缪_重返提帕萨_camus_love_001_card.png         3:4 靜圖(小紅書,目前唯一常態發布的格式)
+20260724_加缪_重返提帕萨_camus_love_001.json             引文資訊
+20260724_加缪_重返提帕萨_camus_love_001_meta.md          三平台發布文案
 ```
+
+檔名是「日期 + 作者 + 書名(沒有就省略)+ slug」,拼音 slug 不好認,夾帶中文
+才能一眼看出是哪一則。9:16 直式卡片是備選格式,預設不出,要的話 `publish.py`
+加 `--with-tall`。
 
 同一天重出不會覆蓋,自動加序號。
 
@@ -188,14 +191,14 @@ Google Sheet          batch.py                      releases/
 
 ### Sheet 欄位
 
-| 欄位     | 說明                                                    |
-| -------- | ------------------------------------------------------- |
-| `text`     | 引文本體。詩歌可以直接換行,不會被當成分隔符             |
-| `author`   | 作者,可留空                                             |
-| `book`     | 書名,不用加書名號,程式會加                              |
+| 欄位       | 說明                                                                                |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `text`     | 引文本體。詩歌可以直接換行,不會被當成分隔符                                         |
+| `author`   | 作者,可留空                                                                         |
+| `book`     | 書名,不用加書名號,程式會加                                                          |
 | `vertical` | 留空 = 橫排。填 `是` / `TRUE` / `竖排` 等(見 `batch.py` 的 `TRUTHY`)= 豎排,適合詩歌 |
-| `status`   | 留空 = 待做。程式會寫入 `processing` / `done` / `error` |
-| `note`     | 程式回寫:成功寫成品檔名,失敗寫錯誤原因                  |
+| `status`   | 留空 = 待做。程式會寫入 `processing` / `done` / `error`                             |
+| `note`     | 程式回寫:成功寫成品檔名,失敗寫錯誤原因                                              |
 
 > `text` / `author` / `book` 是分開傳給 `new.py` 的(`--author` / `--book`),
 > 不是拼成一句再解析。這樣詩歌內部的破折號、換行不會被誤判成署名分隔符,
@@ -270,13 +273,15 @@ python3 generate.py quotes/<slug>.json
 python3 publish.py quotes/<slug>.json --meta --open
 ```
 
-| 旗標         | 作用                                   |
-| ------------ | -------------------------------------- |
-| `--meta`     | 生成三平台文案                         |
-| `--copy tw`  | 剪貼簿取繁體海外版(預設取小紅書簡體版) |
-| `--skip-gen` | 跳過配音步驟(只改了排版時用)           |
-| `--no-card`  | 不出靜圖                               |
-| `--open`     | 完成後打開 releases 資料夾             |
+| 旗標          | 作用                                      |
+| ------------- | ----------------------------------------- |
+| `--meta`      | 生成三平台文案                            |
+| `--copy tw`   | 剪貼簿取繁體海外版(預設取小紅書簡體版)    |
+| `--skip-gen`  | 跳過配音步驟(只改了排版時用)              |
+| `--card-only` | 只出靜圖,不渲影片(改了卡片排版想重印時用) |
+| `--no-card`   | 不出靜圖                                  |
+| `--with-tall` | 連 9:16 直式卡片一起出(備選格式,預設不出) |
+| `--open`      | 完成後打開 releases 資料夾                |
 
 ### `meta.py` — 只生成文案
 
@@ -321,33 +326,38 @@ python3 add_music.py other.mp3  # 指定別的檔名
 {
   "id": "camus_love_001",
   "lang": "zh",
-  "book": "重返提帕萨",              // 可留空,留空則語音只讀作者名
+  "book": "重返提帕萨", // 可留空,留空則語音只讀作者名
   "author": "加缪",
-  "segments": [                      // 斷句是編輯決策,中英手動對應
-    { "zh": "不被爱仅是时运不济，",
-      "en": "To be unloved is merely a stroke of misfortune," },
-    { "zh": "而无力去爱才是真正的灾难。",
-      "en": "but the inability to love is the true catastrophe." }
+  "segments": [
+    // 斷句是編輯決策,中英手動對應
+    {
+      "zh": "不被爱仅是时运不济，",
+      "en": "To be unloved is merely a stroke of misfortune,",
+    },
+    {
+      "zh": "而无力去爱才是真正的灾难。",
+      "en": "but the inability to love is the true catastrophe.",
+    },
   ],
-  "traditional": "s2tw",             // 見下方
+  "traditional": "s2tw", // 見下方
   "hook_video": "hook.mp4",
   "tts": {
     "provider": "elevenlabs",
     "voice_id": "你的 voice_id",
-    "model_id": "eleven_v3",         // 或 eleven_multilingual_v2(較穩定)
-    "stability": 0.0                 // v3 只吃 0.0 / 0.5 / 1.0
+    "model_id": "eleven_v3", // 或 eleven_multilingual_v2(較穩定)
+    "stability": 0.0, // v3 只吃 0.0 / 0.5 / 1.0
   },
-  "title_tts_text": "[somber] 重返提帕薩，加繆。",   // 朗讀專用,可加 v3 標籤
+  "title_tts_text": "[somber] 重返提帕薩，加繆。", // 朗讀專用,可加 v3 標籤
   "timing": {
-    "hook_sec": 4.0,                 // hook.mp4 的實際長度
-    "title_overlap_sec": 1.0,        // 書名提前壓在鉤子尾巴上的秒數
-    "seg_gap_sec": 0.45,             // 只影響最後一段的停留
-    "full_sec": 6.0                  // 完整句幕停留(給人截圖)
+    "hook_sec": 4.0, // hook.mp4 的實際長度
+    "title_overlap_sec": 1.0, // 書名提前壓在鉤子尾巴上的秒數
+    "seg_gap_sec": 0.45, // 只影響最後一段的停留
+    "full_sec": 6.0, // 完整句幕停留(給人截圖)
   },
   "theme": { "paper": "#f3ede1", "ink": "#0e5d2d" },
-  "music": "bgm.mp3",                // 見下方;不要背景音樂就設成 null
-  "safeMode": true,                  // 寫入 manifest.json,但目前沒有元件讀取,先保留欄位
-  "vertical": false                  // 豎排,適合詩歌;只影響完整句幕與靜圖卡片,正文逐段展示仍是橫排
+  "music": "bgm.mp3", // 見下方;不要背景音樂就設成 null
+  "safeMode": true, // 寫入 manifest.json,但目前沒有元件讀取,先保留欄位
+  "vertical": false, // 豎排,適合詩歌;只影響完整句幕與靜圖卡片,正文逐段展示仍是橫排
 }
 ```
 
@@ -466,7 +476,9 @@ curl -s https://api.elevenlabs.io/v1/voices \
 | Remotion   | 本機渲染,免費。`--concurrency=2` 是為 8GB 記憶體設的               |
 
 省額度的習慣:調排版時用 `--skip-gen`,調文案時單獨跑 `meta.py`,
-兩者都不會重新配音。
+兩者都不會重新配音。`publish.py --card-only`(`batch.py` 現在的預設)
+也不配音 —— 靜圖用不到逐字時間戳,`generate.py` 會自動加 `--text-only`
+跳過 ElevenLabs 呼叫,`durationInFrames` 只用字數粗估。
 
 ---
 

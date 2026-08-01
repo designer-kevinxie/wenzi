@@ -31,15 +31,30 @@ const MARGIN_R = 0.085; // 左右留白佔寬度比例
  * maxR   字級上限佔寬度比例(短句時才會碰到這個天花板)
  */
 const LAYOUT = {
-  video: { along: 0.53, bottom: 0.3, maxR: 0.13 },
-  still: { along: 0.66, bottom: 0.1, maxR: 0.15 },
-  videoV: { along: 0.62, bottom: 0.18, maxR: 0.13 },
-  stillV: { along: 0.74, bottom: 0.04, maxR: 0.15 },
+  video: { along: 0.53, bottom: 0.3, maxR: 0.13, marginR: MARGIN_R },
+  still: { along: 0.66, bottom: 0.1, maxR: 0.15, marginR: MARGIN_R },
+  videoV: { along: 0.62, bottom: 0.18, maxR: 0.13, marginR: MARGIN_R },
+  stillV: { along: 0.74, bottom: 0.04, maxR: 0.15, marginR: MARGIN_R },
+  // 鎖屏壁紙:頂部要讓開時鐘/日期、底部要讓開手電筒/相機那排圖示,
+  // 左右邊距也要加大 —— 手機螢幕不是真的 9:16(新機型接近 9:19.5),
+  // 系統會裁掉兩側一截才鋪滿。字多時可以頂到時鐘沒關係,但起始位置
+  // 儘量從時鐘下方開始、落款儘量離底部圖示遠一點。
+  wallpaper: { along: 0.5, bottom: 0.1, maxR: 0.13, marginR: 0.15 },
+  wallpaperV: { along: 0.5, bottom: 0.1, maxR: 0.13, marginR: 0.15 },
 };
 
-const layoutOf = (still: boolean, vertical: boolean) =>
-  vertical ? (still ? LAYOUT.stillV : LAYOUT.videoV)
-           : (still ? LAYOUT.still : LAYOUT.video);
+const layoutOf = (still: boolean, vertical: boolean, wallpaper = false) =>
+  wallpaper
+    ? vertical
+      ? LAYOUT.wallpaperV
+      : LAYOUT.wallpaper
+    : vertical
+      ? still
+        ? LAYOUT.stillV
+        : LAYOUT.videoV
+      : still
+        ? LAYOUT.still
+        : LAYOUT.video;
 
 /**
  * 行首禁則(避頭點)—— 這些標點不能出現在行首 / 列首。
@@ -111,17 +126,18 @@ export const autoFontSize = (
   width: number,
   height: number,
   still = false,
-  vertical = false
+  vertical = false,
+  wallpaper = false,
 ): number => {
-  const L = layoutOf(still, vertical);
+  const L = layoutOf(still, vertical, wallpaper);
   const tracking = Math.round(width * 0.0028);
   const clusters = clusterize(text.replace(/\s/g, ""));
 
   // along  = 文字流動方向上的可用長度
   // across = 行 / 列堆疊方向上的可用長度
-  const along = vertical ? height * L.along : width * (1 - MARGIN_R * 2);
+  const along = vertical ? height * L.along : width * (1 - L.marginR * 2);
   const across = vertical
-    ? width * (1 - MARGIN_R * 2) - attrColumn(width)
+    ? width * (1 - L.marginR * 2) - attrColumn(width)
     : height * L.along;
 
   const fits = (size: number): boolean => {
@@ -154,6 +170,13 @@ export const FullQuoteCard: React.FC<{
   still?: boolean;
   /** 豎排。由 quote json 的 vertical 欄位經 manifest 傳進來。 */
   vertical?: boolean;
+  /** 鎖屏壁紙版面(見 LAYOUT.wallpaper / wallpaperV)。 */
+  wallpaper?: boolean;
+  /**
+   * 暗色底(亮字印在深色底上)。multiply 只會把顏色往暗處疊,
+   * 淺色字在深底上用 multiply 幾乎看不見,暗色版要換成 screen。
+   */
+  dark?: boolean;
 }> = ({
   text,
   attribution,
@@ -162,10 +185,12 @@ export const FullQuoteCard: React.FC<{
   absFrame,
   still = false,
   vertical = false,
+  wallpaper = false,
+  dark = false,
 }) => {
   const { width, height } = useVideoConfig();
-  const L = layoutOf(still, vertical);
-  const size = autoFontSize(text, width, height, still, vertical);
+  const L = layoutOf(still, vertical, wallpaper);
+  const size = autoFontSize(text, width, height, still, vertical, wallpaper);
   const tracking = Math.round(width * 0.0028);
   const clusters = clusterize(text);
   const perChar = still ? 0 : 1.6;
@@ -218,9 +243,9 @@ export const FullQuoteCard: React.FC<{
           flexDirection: "row-reverse",
           justifyContent: "center",
           alignItems: "center",
-          padding: `0 ${width * MARGIN_R}px`,
+          padding: `0 ${width * L.marginR}px`,
           paddingBottom: height * L.bottom,
-          mixBlendMode: "multiply",
+          mixBlendMode: dark ? "normal" : "multiply",
         }}
       >
         <div
@@ -256,9 +281,9 @@ export const FullQuoteCard: React.FC<{
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        padding: `0 ${width * MARGIN_R}px`,
+        padding: `0 ${width * L.marginR}px`,
         paddingBottom: height * L.bottom,
-        mixBlendMode: "multiply",
+        mixBlendMode: dark ? "normal" : "multiply",
       }}
     >
       <div style={{ ...textStyle, textAlign: "left" }}>{body}</div>
